@@ -1,103 +1,202 @@
-//méthodes utiles pour l'entré et la sortie de la console
+/**
+ * @author: Jérôme Gaudin https://github.com/JeromeGaudin
+ */
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
+/**
+ * Classe qui permet d'appeler les bonnes classes en fonction de la commande
+ * taper sur le terminal
+ */
 public class Console {
-  private static final String ligneDebutConsole = "DicoEnglish> ";
-  //private Fichier fichier;
-  private static String dicoFile;
-  private static FichierModifier fichierEcriture;
-  private static FichierLire fichierLecture;
 
-  private boolean exit;
+  /**
+   * Dictionnaire qui associe des nom de commande à des objets CommandLine
+   */
+  public static final Map<String, CommandLine> COMMAND;
 
-  public Console() {
-    Option option = new Option();
-    String dico = option.getDicoFile();
-    if(dico.equals("") == false) {
-      this.dicoFile = option.getDicoFile();
-      this.fichierEcriture = new FichierModifier(dico);
-      this.fichierLecture = new FichierLire(dico);
-      this.exit = false;
+  /**
+   * Crée le dictionnaire qui ne sera pas modifiable
+   */
+  static {
+    Map<String, CommandLine> map = new HashMap<String, CommandLine>();
+    
+    CommandLine translate = new CommandLineTranslate();
+    CommandLine end = new CommandLineEnd();
+    CommandLine help = new CommandLineHelp();
+    CommandLine add = new CommandLineAddTranslate();
+
+    map.put("quit", end);
+    map.put("trans", translate);
+    map.put("help", help);
+    map.put("add", add);
+
+    COMMAND = Collections.unmodifiableMap(map);
+  }
+  
+  /**
+   * Un objet option pour récupéré les options
+   */
+  private Option option;
+
+  /**
+   * Indique si on doit quitter le programme ou non
+   */
+  private boolean end;
+
+  /**
+   * Instance de la classe Console
+   */
+  private static Console instance = null;
+
+  /**
+   * Constructeur
+   */
+  private Console() {
+    option = Option.getInstance();
+    end = false;
+  }
+
+   /**
+   * Permet d'obtenir l'instance de la classe Console
+   * @return une instance de la classe Console
+   */
+  public static Console getInstance() {
+    if(instance == null) {
+      instance = new Console();
+    }
+    return instance;
+  }
+
+  /**
+   * Lit une ligne de la console
+   */
+  public void readLine() {
+    
+    String line;
+    BufferedReader console = new BufferedReader( new InputStreamReader(System.in));
+    
+    try {
+      line = console.readLine().trim();
+
+      if(line != null) {
+        runCommandLine(line);
+      }
+
+    } catch(IOException exc) {
+      System.err.println("Erreur le programme n'a pas pus lire sur la console");
+    }
+  }
+
+  /**
+   * Boucle pour lire charque ligne de commande
+   */
+  public void loopRead() {
+    while( !end) {
+      System.out.print(option.getPreStringConsole());
+      readLine();
+    }
+  }
+
+  /**
+   * Appelle la fonction qui correspond à la ligne de commande taper et sépart
+   * les arguments, tous les argument doivent commencer par - ou -- sinon il
+   * ne sont pas pris en compte
+   * @param commandLine : une ligne de commande
+   */
+  public void runCommandLine(String commandLine) {
+
+    AttributCommandLine attr = separatesAttributs(commandLine);
+
+    CommandLine com = SelectCommandLine(attr);
+
+    if(com == null) {
+      System.out.println("La commande "+attr.getCommand()+" n'existe pas taper la commande : help pour connaire toutes les commandes");
     } else {
-      System.exit(1);
+
+      // si la commande à été appelé avec l'option help
+      if(attr.needHelp()) {
+        com.help(attr);
+      } else {
+        // sinon on exécute la commande normalement
+        com.run(attr);
+      }
     }
   }
 
-  public void actualiserCommande() {
-    int l;
-    String ligneEntre, commande=null;
-    List<String> option = new ArrayList<String>();
-    while(this.exit == false) {
-      String[] argument=null;
-      System.out.print(this.ligneDebutConsole);
-      BufferedReader console = new BufferedReader( new InputStreamReader(System.in));
-      try {
-        ligneEntre = console.readLine().trim();
+  /**
+   * Sépart les attribut de la ligne de commande et les renvoie
+   * Si il y a un "mot\ mot" alors compte les deux mots comme un seul
+   * @param commandLine : ligne de commande
+   * @return AttributCommandLine : un objet qui correspond aux attributs de la
+   * ligne de commande
+   */
+  private AttributCommandLine separatesAttributs(String commandLine) {
 
-        l = ligneEntre.indexOf(" ");
-        if(l != -1) {
-          commande = ligneEntre.substring(0, l); // verifier si il faut ajouter trim ou -1 c'est plus efficace
-          //sépart les options des arguments
-          String[] arguments = ligneEntre.substring(l+1).split(" ");
-          int argumentL = 0;
-          for(int i=0; i<arguments.length; i++) {
-            if(arguments[i].charAt(0) == '-' &&
-             argumentL == 0) {
-              if(arguments[i].charAt(1) == '-' && arguments[i].length() > 2) { // l'option est un mot
-                option.add(arguments[i].substring(2,arguments[i].length()));
-              } else if (arguments[i].length() > 1){ // l'option est une lettre
-                for(int j=1; j<arguments[i].length(); j++) {
-                  option.add(Character.toString(arguments[i].charAt(j)));
-                }
-              }
 
-            } else {
-              if(argumentL == 0) {
-                argument = new String[arguments.length - i];
-              }
-              argument[argumentL] = arguments[i];
-              argumentL++;
-            }
-          }
-        } else {
-          commande = ligneEntre.substring(0, ligneEntre.length());
+    int end = commandLine.indexOf(' ');
+    if(end == -1) {
+      end = commandLine.length();
+    }
+
+    // La commande appelée
+    AttributCommandLine result = new AttributCommandLine(commandLine.substring(0, end));
+
+    int start;
+    String word = null;
+
+    while(end != commandLine.length()) {
+
+      // redélimite un mot
+      start = ++end;
+      end = commandLine.indexOf(' ', end);
+      if(end == -1) {
+      	end = commandLine.length();
+      }
+
+      //si il y a un \ en fin de mot
+      while(commandLine.charAt(end-1) == '\\') {
+        
+        // enlève le \
+        commandLine = commandLine.substring(0, end-1) + commandLine.substring(end);
+
+        // si c'est pas la fin du groupe de mot
+        end = commandLine.indexOf(' ', end);
+        if(end == -1) {
+          end = commandLine.length();
         }
-      } catch(IOException e) {
-        System.err.println("Erreur le programme n'a pas pus lire sur la console");
       }
-      /* utile pour le debug */
-      /*System.out.println("Commande = "+commande);
-      System.out.println("Option = "+option);
-      System.out.print("Argument = ");
-      if(argument != null)
-        for(String n:argument) System.out.print(n+",");
-      System.out.println();*/
-      if(! commande.equals("")) {
-        CommandeConsole commandeConsole = new CommandeConsole(this);
-        commandeConsole.determineCommande(commande,option,argument);
-      }
-      option.removeAll(option);
+      
+      // ajoute le mot
+      word = commandLine.substring(start, end);
+      result.addAttribut(word.trim());
     }
+    return result;
   }
 
-  public FichierModifier getFichierEcriture() {
-    return this.fichierEcriture;
+  /**
+   * Selectionne la commande en fonction du dictionnaire de commandes qui 
+   * associe un mot à une méthode
+   * @param attr : un objet AttributCommandLine qui contient une commande
+   * @return CommandLine : retourne un l'objet command line qui correspond à
+   * la commande dans l'objet AttributCommandLine, peut retourner null si la
+   * commande n'existe pas
+   */
+  private CommandLine SelectCommandLine(AttributCommandLine attr) {
+    CommandLine com = null;
+    com = COMMAND.get(attr.getCommand());
+    return com;
   }
 
-  public FichierLire getFichierLecture() {
-    return this.fichierLecture;
-  }
-
-  public String getNomDico() {
-    return this.dicoFile;
-  }
-
-  public void setExit(boolean f) {
-    this.exit = f;
+  /**
+   * Change l'attribut end, indique que le programme doit se finir
+   */
+  public void ending() {
+  	end = true;
   }
 }

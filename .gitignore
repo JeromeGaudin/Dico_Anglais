@@ -1,2 +1,8 @@
 # source compilées
 *.class
+
+# dictionnaire
+*.dat
+
+# notes
+*.txt

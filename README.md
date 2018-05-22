@@ -1,4 +1,4 @@
-# Dico_Anglais
+# Translator
 
 ## Description
 Ce programme permet de traduire des mots entre deux langues. Il faut d'abord enregistrer les traductions de mots puis, on peut traduire ces mots. Ce programme n'a pas d'interface graphique il fonctionne que en ligne de commande pour que l'utilisation de l'application soit plus rapide.
