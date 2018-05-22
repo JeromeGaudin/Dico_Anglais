@@ -17,7 +17,7 @@ Ce programme tourne sur toutes les machines qui possèdent Java Developpement Ki
 Une fois le code source télécharger compiler touts les fichiers sources avec la commande ```javac *.java```
 
 ### Lancement
-Executer le fichier avec la commande ```java DicoEnglish```
+Executer le fichier avec la commande ```java Translator```
 
 ## Auteur
 [Jérôme GAUDIN](https://github.com/JeromeGaudin)
